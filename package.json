@@ -1,0 +1,28 @@
+{
+  "name": "nexbill",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "esbuild scripts/ssr-check.jsx --bundle --platform=node --format=cjs --jsx=automatic --outfile=.ssr-check.cjs --log-level=error && node .ssr-check.cjs",
+    "server": "npm --prefix server start",
+    "server:dev": "npm --prefix server run dev",
+    "seed": "npm --prefix server run seed",
+    "setup": "npm install && npm --prefix server install"
+  },
+  "dependencies": {
+    "jspdf": "^2.5.2",
+    "lucide-react": "0.383.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.12.7"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11",
+    "vite-plugin-pwa": "^0.20.5"
+  }
+}
