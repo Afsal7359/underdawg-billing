@@ -9,31 +9,34 @@
 import { jsPDF } from "jspdf";
 import { fx, fD, fT } from "./theme.js";
 import { encodeEan13, isValidEan13 } from "./ean13.js";
+import { LOGO_DATA_URI } from "./logo.js";
 
 const INK = [11, 11, 15];
 const MUTE = [122, 122, 131];
 const LINE = [226, 226, 232];
 
 /* ------------------------------------------------------------------ logo -- */
-let logoCache; // data URL | null (null = tried and unavailable)
-
-/** Fetch the shop logo once and keep it as a data URL for embedding. */
+/**
+ * The logo is embedded as a data URI (src/lib/logo.js), so it always renders —
+ * even offline or when the PDF is generated on a different origin than the API.
+ * A custom logoUrl in settings can still override it (fetched if reachable).
+ */
 async function loadLogo(url) {
-  if (logoCache !== undefined) return logoCache;
-  try {
-    const res = await fetch(url, { mode: "cors" });
-    if (!res.ok) throw new Error("no logo");
-    const blob = await res.blob();
-    logoCache = await new Promise((resolve, reject) => {
-      const fr = new FileReader();
-      fr.onload = () => resolve(fr.result);
-      fr.onerror = reject;
-      fr.readAsDataURL(blob);
-    });
-  } catch {
-    logoCache = null; // fall back to the wordmark
+  if (url && url !== "/logo.png") {
+    try {
+      const res = await fetch(url, { mode: "cors" });
+      if (res.ok) {
+        const blob = await res.blob();
+        return await new Promise((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(fr.result);
+          fr.onerror = reject;
+          fr.readAsDataURL(blob);
+        });
+      }
+    } catch { /* fall through to the bundled logo */ }
   }
-  return logoCache;
+  return LOGO_DATA_URI;
 }
 
 /* --------------------------------------------------------------- barcode -- */

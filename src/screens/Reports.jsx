@@ -40,7 +40,7 @@ export function ReportsScreen({ S }) {
   const periodLabel = period === "7D" ? "Last 7 days" : period === "30D" ? "Last 30 days" : "Last 12 months";
   const exportOverview = () => {
     if (!ov) return S.toast("Report still loading…");
-    printHTML("NexBill Report", overviewHTML(ov, S.settings, periodLabel));
+    printHTML("underdawg Bill Report", overviewHTML(ov, S.settings, periodLabel));
     S.toast("Preparing report…", "check");
   };
 
@@ -266,7 +266,7 @@ export function ReportSheet({ S }) {
   }
 
   const rows = data.map((r, i) => <Row key={i} {...r} />);
-  const subtitle = `Generated ${fD(new Date())} · ${S.settings?.storeName || "NexBill"}`;
+  const subtitle = `Generated ${fD(new Date())} · ${S.settings?.storeName || "underdawg"}`;
   const exportPDF = () => { printHTML(T, statementHTML(T, subtitle, data, footer)); S.toast("Preparing PDF…", "check"); };
   const exportCSV = () => {
     const csv = [["Item", "Detail", "Amount"], ...data.map((r) => [r.a, r.b || "", r.c])];

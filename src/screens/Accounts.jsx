@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { Receipt, Users, Search, Bell, Check, Wallet, ArrowUpRight, ArrowDownLeft, UserPlus, Phone, History } from "lucide-react";
-import { INK, SUB, LINE, GREEN, RED, fx, rel } from "../lib/theme.js";
+import { INK, SUB, LINE, GREEN, RED, fx, rel, UK_DIAL } from "../lib/theme.js";
 import { callPhone, whatsapp, digits } from "../lib/deviceActions.js";
 import { Avatar, Segmented, SearchBar, Card, SectionHead, Btn, inputStyle, Field, Screen, LargeHeader, RoundBtn, SmallHeader, Sheet, EmptyState } from "../components/ui.jsx";
 
@@ -74,7 +74,7 @@ export function AccountDetailScreen({ S, id }) {
   if (!c) return null;
   const isCust = c.type === "customer";
   const balTone = c.bal > 0 ? GREEN : c.bal < 0 ? RED : SUB;
-  const store = S.settings?.storeName || "NexBill Store";
+  const store = S.settings?.storeName || "underdawg";
 
   const call = () => { if (callPhone(c.phone)) S.toast(`Calling ${c.name}…`); else S.toast("No phone number on file", "warn"); };
   const remind = () => {
@@ -177,19 +177,25 @@ export function PaymentSheet({ S }) {
 
 export function AddCustomerSheet({ S }) {
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  // Pre-fill the UK dialling code so staff just type the local number.
+  const [phone, setPhone] = useState(UK_DIAL + " ");
   const [type, setType] = useState("Customer");
   const [open, setOpen] = useState("");
   return (
     <Sheet open onClose={() => S.setSheet({})}>
       <div style={{ fontSize: 19, fontWeight: 850, marginBottom: 16 }}>New party</div>
-      <Field label="Full name"><input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Ramesh Gupta" /></Field>
-      <Field label="Phone"><input style={inputStyle} inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91" /></Field>
+      <Field label="Full name"><input style={inputStyle} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. James Smith" /></Field>
+      <Field label="Phone"><input style={inputStyle} inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+44 7911 123456" /></Field>
       <Field label="Type"><Segmented options={["Customer", "Supplier"]} value={type} onChange={setType} /></Field>
       <Field label="Opening balance (optional)">
         <input style={inputStyle} inputMode="numeric" value={open} onChange={(e) => setOpen(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="£0" />
       </Field>
-      <Btn icon={Check} disabled={!name.trim()} onClick={() => S.addCustomer({ name: name.trim(), phone: phone || "—", type: type.toLowerCase(), open: Number(open) || 0 })}>
+      <Btn icon={Check} disabled={!name.trim()} onClick={() => {
+        // Drop a bare dialling code (no actual number typed).
+        const digitsOnly = phone.replace(/\D/g, "");
+        const cleanPhone = digitsOnly === "" || digitsOnly === "44" ? "" : phone.trim();
+        S.addCustomer({ name: name.trim(), phone: cleanPhone || "—", type: type.toLowerCase(), open: Number(open) || 0 });
+      }}>
         Save party
       </Btn>
     </Sheet>

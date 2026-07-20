@@ -20,8 +20,8 @@ export default defineConfig({
       injectRegister: "auto",
       includeAssets: ["icons/apple-touch-icon.png"],
       manifest: {
-        name: "NexBill — Billing & Inventory",
-        short_name: "NexBill",
+        name: "underdawg Billing",
+        short_name: "Billing",
         description: "Fast billing, barcode scanning, khata accounts and reports for your store.",
         start_url: "/",
         scope: "/",

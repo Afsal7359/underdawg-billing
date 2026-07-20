@@ -34,19 +34,24 @@ function isIOSSafari() {
   return isIOS() && /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|FBAN|FBAV|Instagram|Line/.test(ua);
 }
 
-const SNOOZE_KEY = "nexbill_install_snoozed_until";
-const SNOOZE_DAYS = 7;
+/**
+ * Dismissal is SESSION-scoped on purpose.
+ *
+ * The rule we want is simply: "showing in a browser?  ->  offer the install.
+ * running as an installed app?  ->  never mention it again."
+ *
+ * So we deliberately do NOT persist the dismissal to localStorage — closing it
+ * just gets it out of the way for the current tab. Open the app in the browser
+ * again and it prompts again; install it and it disappears for good, because
+ * `isStandalone()` becomes true.
+ */
+const DISMISS_KEY = "nexbill_install_dismissed";
 
-function snoozed() {
-  try {
-    const t = Number(localStorage.getItem(SNOOZE_KEY) || 0);
-    return t > Date.now();
-  } catch { return false; }
+function dismissedThisSession() {
+  try { return sessionStorage.getItem(DISMISS_KEY) === "1"; } catch { return false; }
 }
-function snooze() {
-  try {
-    localStorage.setItem(SNOOZE_KEY, String(Date.now() + SNOOZE_DAYS * 86400000));
-  } catch {}
+function markDismissed() {
+  try { sessionStorage.setItem(DISMISS_KEY, "1"); } catch {}
 }
 
 /* -------------------------------------------------------------- component -- */
@@ -62,12 +67,14 @@ export default function InstallPrompt() {
   const [installed, setInstalled] = useState(isStandalone);
 
   useEffect(() => {
+    // Running as an installed app -> never prompt.
     if (installed) return;
 
     const onBIP = (e) => {
-      e.preventDefault();            // stop Chrome's mini-infobar; we show our own
+      // Stop Chrome's own mini-infobar and keep the event so our button can
+      // trigger the real native install dialog.
+      e.preventDefault();
       setDeferred(e);
-      if (!snoozed()) setOpen(true);
     };
     const onInstalled = () => {
       setInstalled(true);
@@ -78,12 +85,14 @@ export default function InstallPrompt() {
     window.addEventListener("beforeinstallprompt", onBIP);
     window.addEventListener("appinstalled", onInstalled);
 
-    // iOS never fires beforeinstallprompt — decide on our own after a beat so
-    // the sheet doesn't fight the first paint.
-    let t;
-    if (isIOSSafari() && !snoozed()) {
-      t = setTimeout(() => setOpen(true), 1200);
-    }
+    // Show the sheet on EVERY browser visit, on every platform — we no longer
+    // wait for `beforeinstallprompt`, because on iOS it never fires and on
+    // Android it may not fire at all (already-dismissed heuristics, engagement
+    // rules, desktop). Waiting on it meant most users saw nothing.
+    // Short delay so the sheet doesn't fight the first paint.
+    const t = setTimeout(() => {
+      if (!isStandalone() && !dismissedThisSession()) setOpen(true);
+    }, 900);
 
     // If the app gets installed in another tab, react to the display-mode flip.
     const mq = window.matchMedia?.("(display-mode: standalone)");
@@ -94,7 +103,7 @@ export default function InstallPrompt() {
       window.removeEventListener("beforeinstallprompt", onBIP);
       window.removeEventListener("appinstalled", onInstalled);
       mq?.removeEventListener?.("change", onMode);
-      if (t) clearTimeout(t);
+      clearTimeout(t);
     };
   }, [installed]);
 
@@ -106,14 +115,15 @@ export default function InstallPrompt() {
     if (!deferred) return;
     deferred.prompt();
     try {
-      const { outcome } = await deferred.userChoice;
-      if (outcome !== "accepted") snooze();
+      await deferred.userChoice; // 'accepted' fires `appinstalled`, which hides us
     } catch { /* ignore */ }
     setDeferred(null);
     setOpen(false);
   };
 
-  const dismiss = () => { snooze(); setOpen(false); };
+  // Closing only hides it for this tab — reopening the app in a browser prompts
+  // again. Once actually installed, `isStandalone()` keeps it hidden for good.
+  const dismiss = () => { markDismissed(); setOpen(false); };
 
   return (
     <>
@@ -164,13 +174,17 @@ export default function InstallPrompt() {
         {ios ? (
           <>
             <div style={{ background: "#fff", borderRadius: 18, padding: 16, marginBottom: 14 }}>
-              <Step n={1} icon={Share} text={<>Tap the <b>Share</b> button in Safari's toolbar</>} />
-              <Step n={2} icon={PlusSquare} text={<>Choose <b>Add to Home Screen</b></>} />
-              <Step n={3} icon={null} text={<>Tap <b>Add</b> — then open it from your Home Screen</>} last />
+              <Step n={1} icon={Share} text={<>Tap the <b>Share</b> button <span style={{ color: SUB }}>(the square with an arrow, at the bottom of Safari)</span></>} />
+              <Step n={2} icon={PlusSquare} text={<>Scroll down and tap <b>Add to Home Screen</b></>} />
+              <Step n={3} icon={null} text={<>Tap <b>Add</b>, then open <b>underdawg Billing</b> from your Home Screen</>} last />
             </div>
+            <p style={{ fontSize: 11.5, color: SUB, fontWeight: 600, marginBottom: 12, lineHeight: 1.55 }}>
+              You'll need to sign in once more inside the installed app — iOS keeps
+              its storage separate from Safari.
+            </p>
             {!isIOSSafari() && (
               <p style={{ fontSize: 12, color: "#C46A00", fontWeight: 650, marginBottom: 12, lineHeight: 1.5 }}>
-                On iPhone/iPad only <b>Safari</b> can install apps. Open this page in Safari to add it.
+                On iPhone/iPad this works best in <b>Safari</b>. Open this page in Safari to add it.
               </p>
             )}
             <Btn tone="soft" style={{ width: "100%" }} onClick={dismiss}>Got it</Btn>

@@ -45,16 +45,8 @@ export default function Login({ onSuccess }) {
         style={{ width: "100%", maxWidth: 380, background: "#fff", borderRadius: 26, padding: 26, boxShadow: "0 18px 50px rgba(0,0,0,.10)" }}
       >
         <div style={{ textAlign: "center", marginBottom: 22 }}>
-          <div
-            style={{
-              width: 58, height: 58, borderRadius: 20, background: INK, color: "#fff",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              margin: "0 auto 14px", fontWeight: 900, fontSize: 21, letterSpacing: -0.5,
-            }}
-          >
-            ud
-          </div>
-          <h1 style={{ fontSize: 23, fontWeight: 850, letterSpacing: -0.5 }}>underdawg billing</h1>
+          <img src="/logo.png" alt="underdawg" style={{ height: 46, width: "auto", maxWidth: 200, objectFit: "contain", margin: "0 auto 14px", display: "block" }} />
+          <h1 style={{ fontSize: 21, fontWeight: 850, letterSpacing: -0.5 }}>Billing</h1>
           <p style={{ fontSize: 13, color: SUB, fontWeight: 600, marginTop: 5 }}>
             Sign in to start billing
           </p>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Receipt, Plus, Search, ChevronRight, Printer, Check, Package, Download, Barcode, Store, Percent, PackagePlus, ScanLine } from "lucide-react";
-import { INK, SUB, LINE, GREEN, BLUE, fx, TAX } from "../lib/theme.js";
+import { INK, SUB, LINE, GREEN, BLUE, fx, TAX, UK_DIAL } from "../lib/theme.js";
 import { CATEGORIES } from "../lib/data.js";
 import { printHTML, labelHTML, downloadFile } from "../lib/deviceActions.js";
 import { BarcodeView, Pill, SearchBar, Stepper, Card, Btn, inputStyle, Field, Screen, RoundBtn, SmallHeader, Sheet, EmptyState } from "../components/ui.jsx";
@@ -162,16 +162,16 @@ export function SettingsSheet({ S }) {
   const [owner, setOwner] = useState(st.owner || "");
   const [address, setAddress] = useState(st.address || "");
   const [gstin, setGstin] = useState(st.gstin || "");
-  const [phone, setPhone] = useState(st.phone || "");
+  const [phone, setPhone] = useState(st.phone || UK_DIAL + " ");
 
   const doBackup = () => {
     const stamp = new Date().toISOString().slice(0, 10);
     const data = { exportedAt: new Date().toISOString(), store: st, products: S.products, parties: S.customers, orders: S.orders, expenses: S.expenses };
-    downloadFile(`nexbill-backup-${stamp}.json`, JSON.stringify(data, null, 2), "application/json");
+    downloadFile(`underdawg-bill-backup-${stamp}.json`, JSON.stringify(data, null, 2), "application/json");
     S.toast("Backup downloaded", "check");
   };
   const rows = [
-    { l: "Taxes", s: `GST ${TAX}% applied on bills`, Icon: Percent, do: () => S.toast(`GST is set to ${TAX}% on every bill`) },
+    { l: "Taxes", s: TAX > 0 ? `VAT ${TAX}% applied on bills` : "No VAT applied by default", Icon: Percent, do: () => S.toast(TAX > 0 ? `VAT is set to ${TAX}%` : "VAT is off by default") },
     { l: "Printer & devices", s: "Receipt printer, scanner", Icon: Printer, do: () => S.toast("Use your browser's print dialog to connect a printer") },
     { l: "Backup & sync", s: "Download all your data as JSON", Icon: Download, do: doBackup },
   ];
@@ -188,7 +188,7 @@ export function SettingsSheet({ S }) {
           <Store size={23} color="#fff" strokeWidth={2.1} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 850, fontSize: 16.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{st.storeName || "NexBill Store"}</div>
+          <div style={{ fontWeight: 850, fontSize: 16.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{st.storeName || "underdawg"}</div>
           <div style={{ fontSize: 12.5, color: SUB, fontWeight: 650, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{st.owner || "—"} · {st.address || ""}</div>
         </div>
         <button className="press" onClick={() => setEdit((v) => !v)} style={{ fontSize: 13.5, fontWeight: 750, color: BLUE }}>{edit ? "Cancel" : "Edit"}</button>
@@ -200,7 +200,7 @@ export function SettingsSheet({ S }) {
           <Field label="Owner"><input style={inputStyle} value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="Owner name" /></Field>
           <Field label="Address"><input style={inputStyle} value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Shop address" /></Field>
           <div style={{ display: "flex", gap: 10 }}>
-            <div style={{ flex: 1.4 }}><Field label="GSTIN"><input style={inputStyle} value={gstin} onChange={(e) => setGstin(e.target.value)} placeholder="GSTIN" /></Field></div>
+            <div style={{ flex: 1.4 }}><Field label="VAT number"><input style={inputStyle} value={gstin} onChange={(e) => setGstin(e.target.value)} placeholder="VAT number (optional)" /></Field></div>
             <div style={{ flex: 1 }}><Field label="Phone"><input style={inputStyle} inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91" /></Field></div>
           </div>
           <Btn icon={Check} disabled={!storeName.trim()} onClick={save}>Save details</Btn>

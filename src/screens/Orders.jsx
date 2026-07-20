@@ -101,8 +101,8 @@ export function OrderDetailScreen({ S, id }) {
           <div style={{ width: 48, height: 48, borderRadius: 17, background: INK, margin: "0 auto 10px", display: "flex", alignItems: "center", justifyContent: "center" }}>
             <Store size={22} color="#fff" strokeWidth={2.2} />
           </div>
-          <div style={{ fontWeight: 850, fontSize: 17, letterSpacing: -0.3 }}>{S.settings?.storeName || "NexBill Store"}</div>
-          <div style={{ fontSize: 12, color: SUB, fontWeight: 600, marginTop: 2 }}>{S.settings?.address || "MG Road, Bengaluru"} • GSTIN {S.settings?.gstin || "—"}</div>
+          <div style={{ fontWeight: 850, fontSize: 17, letterSpacing: -0.3 }}>{S.settings?.storeName || "underdawg"}</div>
+          <div style={{ fontSize: 12, color: SUB, fontWeight: 600, marginTop: 2 }}>{S.settings?.address || ""}{S.settings?.gstin ? ` • VAT ${S.settings.gstin}` : ""}</div>
           <div style={{ display: "flex", justifyContent: "center", gap: 8, marginTop: 10 }}>
             <StatusPill status={o.status} />
             <Pill tone="gray"><ModeIcon size={11} style={{ marginRight: 4, verticalAlign: -1.5 }} />{o.mode}</Pill>
@@ -133,7 +133,7 @@ export function OrderDetailScreen({ S, id }) {
         <div style={{ borderTop: `1.5px dashed rgba(0,0,0,.12)`, paddingTop: 10 }}>
           <Line l="Subtotal" r={fx(o.sub)} />
           {o.disc > 0 && <Line l="Discount" r={"−" + fx(o.disc)} tone={GREEN} />}
-          <Line l={`GST (${TAX}%)`} r={fx(o.tax)} />
+          {o.tax > 0 && <Line l={`VAT (${o.taxRate || TAX}%)`} r={fx(o.tax)} />}
           <Line l="Total" r={fx(o.total)} bold />
           <Line l="Paid" r={fx(o.paid)} />
           {due > 0 && <Line l="Balance due" r={fx(due)} tone={RED} />}

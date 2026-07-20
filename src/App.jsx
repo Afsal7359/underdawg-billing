@@ -67,14 +67,8 @@ function Sidebar({ S }) {
   ];
   return (
     <div className="nb-side">
-      <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "2px 8px 4px" }}>
-        <div style={{ width: 42, height: 42, borderRadius: 14, background: INK, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <Store size={21} color="#fff" strokeWidth={2.1} />
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 850, fontSize: 16, letterSpacing: -0.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{S.settings?.storeName || "NexBill"}</div>
-          <div style={{ fontSize: 11.5, color: SUB, fontWeight: 650 }}>Billing & inventory</div>
-        </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "2px 8px 6px" }}>
+        <img src="/logo.png" alt="underdawg" style={{ height: 34, width: "auto", maxWidth: 150, objectFit: "contain" }} />
       </div>
 
       <button className="press" onClick={() => S.openStack({ name: "bill" })} style={{
@@ -100,10 +94,10 @@ function Sidebar({ S }) {
       <div style={{ flex: 1 }} />
 
       <button className="nb-navbtn" onClick={() => S.setSheet({ settings: true })} style={{ gap: 11 }}>
-        <Avatar name={S.settings?.owner || "Arjun V"} hue="#0B0B0F" size={34} />
+        <Avatar name={S.user?.name || S.settings?.owner || "Staff"} hue="#0B0B0F" size={34} />
         <div style={{ minWidth: 0, textAlign: "left" }}>
-          <div style={{ fontWeight: 800, fontSize: 13.5, color: INK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{S.settings?.owner || "Arjun V"}</div>
-          <div style={{ fontSize: 11, color: SUB, fontWeight: 650 }}>Settings</div>
+          <div style={{ fontWeight: 800, fontSize: 13.5, color: INK, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{S.user?.name || S.settings?.owner || "Staff"}</div>
+          <div style={{ fontSize: 11, color: SUB, fontWeight: 650, textTransform: "capitalize" }}>{S.user?.role || "Settings"}</div>
         </div>
         <SettingsIcon size={16} color="#B0B0B8" style={{ marginLeft: "auto" }} />
       </button>
@@ -142,7 +136,7 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [extraPay, setExtraPay] = useState({});
   const [expenses, setExpenses] = useState([]);
-  const [settings, setSettings] = useState({ storeName: "NexBill Store", owner: "Arjun V", address: "MG Road, Bengaluru", gstin: "29ABCDE1234F1Z5" });
+  const [settings, setSettings] = useState({ storeName: "underdawg", owner: "", address: "", gstin: "" });
   const [walkId, setWalkId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState(null);

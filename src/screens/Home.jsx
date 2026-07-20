@@ -1,6 +1,6 @@
 import { Receipt, BarChart3, Bell, ChevronRight, TrendingUp, AlertTriangle, Boxes, ScanLine, Package } from "lucide-react";
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { INK, SUB, LINE, ORANGE, RED, BLUE, fx, rel, SAFE_T, dailySeries } from "../lib/theme.js";
+import { INK, SUB, LINE, ORANGE, RED, BLUE, fx, rel, SAFE_T, dailySeries, greeting } from "../lib/theme.js";
 import { Avatar, Card, SectionHead, Screen, RoundBtn, ChartTip, OrderRow, Sheet, EmptyState, StatusPill } from "../components/ui.jsx";
 
 export function Sparkline({ data, w = 96, h = 40 }) {
@@ -25,10 +25,10 @@ export function HomeScreen({ S }) {
   const delta = Math.round(((tRev - yRev) / yRev) * 100);
   const itemsSold = today.reduce((s, o) => s + o.items.reduce((a, i) => a + i.qty, 0), 0);
   const low = S.products.filter((p) => p.stock === 0);
-  const hour = new Date().getHours();
-  const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-  const owner = (S.settings?.owner || "Arjun V");
-  const firstName = owner.split(" ")[0];
+  // Greeting follows UK time; the name comes from the signed-in user.
+  const greet = greeting();
+  const displayName = S.user?.name || S.settings?.owner || "";
+  const firstName = displayName.split(" ")[0];
   const week = dailySeries(S.orders, 7);
 
   const QA = [
@@ -43,9 +43,9 @@ export function HomeScreen({ S }) {
       <div style={{ paddingTop: `calc(${SAFE_T} + 14px)`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <div style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: 1.6, color: SUB, textTransform: "uppercase" }}>
-            {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "short" })}
+            {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" })}
           </div>
-          <div style={{ fontSize: 25, fontWeight: 850, letterSpacing: -0.6, marginTop: 2 }}>{greet}, {firstName}</div>
+          <div style={{ fontSize: 25, fontWeight: 850, letterSpacing: -0.6, marginTop: 2 }}>{greet}{firstName ? `, ${firstName}` : ""}</div>
         </div>
         <div style={{ display: "flex", gap: 9 }}>
           <div style={{ position: "relative" }}>
@@ -57,7 +57,7 @@ export function HomeScreen({ S }) {
             )}
           </div>
           <button className="pressS" onClick={() => S.setSheet({ settings: true })}>
-            <Avatar name={owner} hue="#0B0B0F" size={40} />
+            <Avatar name={displayName || "Staff"} hue="#0B0B0F" size={40} />
           </button>
         </div>
       </div>

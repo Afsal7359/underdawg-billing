@@ -83,6 +83,39 @@ export const rel = (d) => {
   return diff === 0 ? "Today" : diff === 1 ? "Yesterday" : fD(d);
 };
 export const uid = () => Math.random().toString(36).slice(2, 9);
+
+/* ---------- UK locale helpers ---------- */
+/* The shop operates in the UK, so greet by LONDON time regardless of the
+   device's own timezone (a phone set to another region would otherwise say
+   "Good evening" at a UK lunchtime). */
+export const ukHour = () => {
+  try {
+    return Number(
+      new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "numeric", hour12: false }).format(new Date())
+    );
+  } catch {
+    return new Date().getHours();
+  }
+};
+export const greeting = () => {
+  const h = ukHour();
+  return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+};
+
+/* Default dialling code shown in phone inputs. */
+export const UK_DIAL = "+44";
+
+/* Normalise any entered number to wa.me digits (no +, no leading 0):
+   "07911 123456" -> "447911123456", "+44 7911 123456" -> "447911123456". */
+export const waDigits = (phone) => {
+  let d = String(phone || "").replace(/[^\d+]/g, "");
+  if (d.startsWith("+")) d = d.slice(1);
+  else if (d.startsWith("0")) d = "44" + d.slice(1);
+  else if (d && !d.startsWith("44")) d = "44" + d;
+  // Collapse the redundant "0" in the "+44 (0)7911..." trunk notation.
+  if (d.startsWith("440")) d = "44" + d.slice(3);
+  return d;
+};
 /* Default tax rate (%). 0 = no tax by default for underdawg; the per-bill
    toggle still works, and the rate is overridable from billing Settings. */
 export const TAX = 0;

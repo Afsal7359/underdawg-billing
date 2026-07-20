@@ -1,5 +1,5 @@
 /* ==================================================================
- *  NexBill API client
+ *  underdawg Bill API client
  *  Talks to the billing API that lives inside the underdawg service
  *  (oneBackend gateway → /underdwag/api/billing). Same port, same
  *  database and the same product catalogue as the website.
