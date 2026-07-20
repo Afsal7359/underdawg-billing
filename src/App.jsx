@@ -5,6 +5,7 @@ import { api, auth, AuthError } from "./lib/api.js";
 import { Avatar, Toast } from "./components/ui.jsx";
 import Login from "./components/Login.jsx";
 import InstallPrompt from "./components/InstallPrompt.jsx";
+import UpdatePrompt from "./components/UpdatePrompt.jsx";
 import { HomeScreen } from "./screens/Home.jsx";
 import { OrdersScreen, OrderDetailScreen } from "./screens/Orders.jsx";
 import { BillScreen, ScannerModal, SuccessSheet, CustomerPickerSheet, CustomItemSheet, SizePickerSheet } from "./screens/Bill.jsx";
@@ -450,6 +451,7 @@ export default function App() {
         <style>{CSS}</style>
         <Login onSuccess={(u) => { setUser(u); }} />
         <InstallPrompt />
+        <UpdatePrompt />
       </div>
     );
   }
@@ -475,6 +477,7 @@ export default function App() {
           </div>
         </div>
         <InstallPrompt />
+        <UpdatePrompt />
       </div>
     );
   }
@@ -488,6 +491,7 @@ export default function App() {
         {overlays}
       </div>
       <InstallPrompt />
+      <UpdatePrompt />
     </div>
   );
 }

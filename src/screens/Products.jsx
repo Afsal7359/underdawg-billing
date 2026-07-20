@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Receipt, Plus, Search, ChevronRight, Printer, Check, Package, Download, Barcode, Store, Percent, PackagePlus, ScanLine } from "lucide-react";
+import { Receipt, Plus, Search, ChevronRight, Printer, Check, Package, Download, Barcode, Store, Percent, PackagePlus, ScanLine, RefreshCw } from "lucide-react";
 import { INK, SUB, LINE, GREEN, BLUE, fx, TAX, UK_DIAL } from "../lib/theme.js";
 import { CATEGORIES } from "../lib/data.js";
 import { printHTML, labelHTML, downloadFile } from "../lib/deviceActions.js";
@@ -174,6 +174,17 @@ export function SettingsSheet({ S }) {
     { l: "Taxes", s: TAX > 0 ? `VAT ${TAX}% applied on bills` : "No VAT applied by default", Icon: Percent, do: () => S.toast(TAX > 0 ? `VAT is set to ${TAX}%` : "VAT is off by default") },
     { l: "Printer & devices", s: "Receipt printer, scanner", Icon: Printer, do: () => S.toast("Use your browser's print dialog to connect a printer") },
     { l: "Backup & sync", s: "Download all your data as JSON", Icon: Download, do: doBackup },
+    // Manual fallback: force the app to reload and check for a new version. The
+    // "Update available" banner handles this automatically, this is the "just
+    // refresh it" button.
+    { l: "Refresh app", s: "Reload and check for updates", Icon: RefreshCw, do: async () => {
+        S.toast("Refreshing…", "check");
+        try {
+          const regs = await navigator.serviceWorker?.getRegistrations?.();
+          await Promise.all((regs || []).map((r) => r.update()));
+        } catch { /* ignore */ }
+        setTimeout(() => window.location.reload(), 350);
+      } },
   ];
 
   const save = async () => {

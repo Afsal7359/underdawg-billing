@@ -23,8 +23,17 @@ button{cursor:pointer}
 .pulse{animation:nbPulse 1.6s ease-in-out infinite}
 .glow{animation:nbGlow 7s ease-in-out infinite}
 .nb-outer{background:linear-gradient(160deg,#E7E7EE,#DDDDE6)}
+html,body,#root{height:100%}
 .phone{width:100%;height:100%;max-width:430px;background:#F2F2F7;position:relative;overflow:hidden;display:flex;flex-direction:column}
 @media(min-width:480px) and (max-width:899px){.phone{height:min(94vh,940px);border-radius:42px;box-shadow:0 30px 70px rgba(20,20,35,.22),0 0 0 1px rgba(0,0,0,.05)}}
+/* Installed / standalone app: ALWAYS full-bleed. The floating rounded "phone
+   frame" above is a browser-preview nicety, but when installed it left blank
+   gradient below/around the UI on tablets and wider devices (the "blank under
+   the bottom bar"). Force the app to fill the whole screen with no frame. */
+@media (display-mode:standalone),(display-mode:fullscreen),(display-mode:minimal-ui){
+  .nb-outer{background:#F2F2F7}
+  .phone{height:100%!important;max-width:none!important;border-radius:0!important;box-shadow:none!important}
+}
 
 /* ---------- desktop / large-screen shell ---------- */
 .nb-desktop{display:flex;width:100vw;height:100vh;background:#F2F2F7;overflow:hidden}

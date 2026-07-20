@@ -16,9 +16,13 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "autoUpdate",
-      injectRegister: "auto",
-      includeAssets: ["icons/apple-touch-icon.png"],
+      // "prompt" (not autoUpdate): a new deploy downloads in the background and
+      // WAITS — we then show an in-app "Update" button (UpdatePrompt.jsx) so the
+      // cashier is never reloaded in the middle of a bill. The service worker is
+      // registered by the useRegisterSW() hook, so we disable auto-injection.
+      registerType: "prompt",
+      injectRegister: false,
+      includeAssets: ["icons/apple-touch-icon.png", "logo.png"],
       manifest: {
         name: "underdawg Billing",
         short_name: "Billing",
