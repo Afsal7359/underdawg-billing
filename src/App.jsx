@@ -7,7 +7,7 @@ import Login from "./components/Login.jsx";
 import InstallPrompt from "./components/InstallPrompt.jsx";
 import UpdatePrompt from "./components/UpdatePrompt.jsx";
 import { HomeScreen } from "./screens/Home.jsx";
-import { OrdersScreen, OrderDetailScreen } from "./screens/Orders.jsx";
+import { OrdersScreen, OrderDetailScreen, VoidOrderSheet } from "./screens/Orders.jsx";
 import { BillScreen, ScannerModal, SuccessSheet, CustomerPickerSheet, CustomItemSheet, SizePickerSheet } from "./screens/Bill.jsx";
 import { AccountsScreen, AccountDetailScreen, PaymentSheet, AddCustomerSheet } from "./screens/Accounts.jsx";
 import { ReportsScreen, ReportSheet } from "./screens/Reports.jsx";
@@ -133,6 +133,8 @@ export default function App() {
   const [tab, setTab] = useState("home");
   const [stack, setStack] = useState([]);
   const [products, setProducts] = useState([]);
+  // Real catalogue categories, sent by the API so they always match the website.
+  const [categories, setCategories] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [orders, setOrders] = useState([]);
   const [extraPay, setExtraPay] = useState({});
@@ -177,6 +179,7 @@ export default function App() {
     try {
       const b = await api.bootstrap();
       setProducts(b.products);
+      setCategories(b.categories || []);
       setCustomers(b.customers);
       setOrders(b.orders);
       setExtraPay(b.extraPay);
@@ -314,6 +317,47 @@ export default function App() {
     }
   };
 
+  /**
+   * Move a bill to the trash. `type` is "deleted" (billed in error) or
+   * "returned" (goods came back) — the server restores stock, unwinds the
+   * customer's balance and drops it from sales either way. Nothing is
+   * destroyed, so it can be restored from the Trash tab.
+   */
+  const voidOrder = async (id, type, reason) => {
+    try {
+      const { order, products: updated, party } = await api.voidOrder(id, type, reason);
+      setOrders((os) => os.map((o) => (o.id === order.id ? order : o)));
+      if (updated.length) {
+        const map = new Map(updated.map((p) => [p.id, p]));
+        setProducts((ps) => ps.map((p) => map.get(p.id) || p));
+      }
+      if (party) setCustomers((cs) => cs.map((c) => (c.id === party.id ? party : c)));
+      setSheet({});
+      pop();
+      const refund = order.refundDue > 0 ? ` · refund ${fx(order.refundDue)}` : "";
+      toast(`${order.no} ${type === "returned" ? "returned" : "deleted"}${refund}`, "check");
+    } catch (e) {
+      toast(e.message, "warn");
+    }
+  };
+
+  /** Pull a bill back out of the trash, re-applying stock and balance. */
+  const restoreOrder = async (id) => {
+    try {
+      const { order, products: updated, party } = await api.restoreOrder(id);
+      setOrders((os) => os.map((o) => (o.id === order.id ? order : o)));
+      if (updated.length) {
+        const map = new Map(updated.map((p) => [p.id, p]));
+        setProducts((ps) => ps.map((p) => map.get(p.id) || p));
+      }
+      if (party) setCustomers((cs) => cs.map((c) => (c.id === party.id ? party : c)));
+      setSheet({});
+      toast(`${order.no} restored`, "check");
+    } catch (e) {
+      toast(e.message, "warn");
+    }
+  };
+
   const setStock = async (pid, delta) => {
     setProducts((ps) => ps.map((p) => (p.id === pid ? { ...p, stock: Math.max(p.stock + delta, 0) } : p)));
     try {
@@ -402,7 +446,8 @@ export default function App() {
     user, logout,
     billCustomer, setBillCustomer, billDisc, setBillDisc, billTax, setBillTax,
     billMode, setBillMode, billRecv, setBillRecv,
-    createOrder, recordPayment, setStock, addProduct, addCustomer,
+    categories,
+    createOrder, recordPayment, voidOrder, restoreOrder, setStock, addProduct, addCustomer,
     addExpense, editExpense, deleteExpense, saveSettings,
     scan, openScanner: (ctx) => setScan({ open: true, ctx }),
     closeScanner: () => setScan({ open: false, ctx: "lookup" }),
@@ -433,6 +478,7 @@ export default function App() {
       {sheet.customItem && <CustomItemSheet S={S} />}
       {sheet.pickSize && <SizePickerSheet S={S} />}
       {sheet.payment && <PaymentSheet S={S} />}
+      {sheet.voidOrder && <VoidOrderSheet S={S} />}
       {sheet.addCustomer && <AddCustomerSheet S={S} />}
       {sheet.addProduct && <AddProductSheet S={S} />}
       {sheet.product && <ProductSheet S={S} />}

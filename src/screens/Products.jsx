@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Receipt, Plus, Search, ChevronRight, Printer, Check, Package, Download, Barcode, Store, Percent, PackagePlus, ScanLine, RefreshCw } from "lucide-react";
 import { INK, SUB, LINE, GREEN, BLUE, fx, TAX, UK_DIAL } from "../lib/theme.js";
-import { CATEGORIES } from "../lib/data.js";
 import { printHTML, labelHTML, downloadFile } from "../lib/deviceActions.js";
 import { BarcodeView, Pill, SearchBar, Stepper, Card, Btn, inputStyle, Field, Screen, RoundBtn, SmallHeader, Sheet, EmptyState } from "../components/ui.jsx";
 import { Thumb } from "./Bill.jsx";
@@ -9,10 +8,17 @@ import { Thumb } from "./Bill.jsx";
 export function ProductsScreen({ S }) {
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("All");
-  const list = S.products.filter((p) =>
-    (cat === "All" || p.cat === cat) &&
-    (!q || p.name.toLowerCase().includes(q.toLowerCase()) || p.code.includes(q))
-  );
+  const list = S.products.filter((p) => {
+    if (cat !== "All" && p.cat !== cat) return false;
+    if (!q) return true;
+    const needle = q.toLowerCase().trim();
+    return (
+      p.name.toLowerCase().includes(needle) ||
+      (p.code || "").includes(needle) ||
+      (p.ref || "").toLowerCase().includes(needle) ||
+      (p.slug || "").toLowerCase().includes(needle)
+    );
+  });
   return (
     <Screen>
       <SmallHeader title="Items" sub={`${S.products.length} products · ${S.products.filter((p) => p.stock === 0).length} out of stock`} onBack={S.pop}
@@ -20,9 +26,9 @@ export function ProductsScreen({ S }) {
           <RoundBtn icon={ScanLine} onClick={() => S.openScanner("lookup")} />
           <RoundBtn icon={PackagePlus} dark onClick={() => S.setSheet({ addProduct: {} })} />
         </>} />
-      <SearchBar value={q} onChange={setQ} placeholder="Search name or barcode" />
+      <SearchBar value={q} onChange={setQ} placeholder="Search name, barcode or #ref" />
       <div style={{ display: "flex", gap: 8, overflowX: "auto", margin: "12px -18px 0", padding: "0 18px" }}>
-        {["All", ...CATEGORIES].map((c) => (
+        {["All", ...(S.categories || [])].map((c) => (
           <button key={c} className="press" onClick={() => setCat(c)} style={{
             padding: "8px 15px", borderRadius: 99, fontSize: 13, fontWeight: 750, whiteSpace: "nowrap",
             background: cat === c ? INK : "#fff", color: cat === c ? "#fff" : "#5B5B63",
@@ -39,11 +45,20 @@ export function ProductsScreen({ S }) {
             <Thumb src={p.img} name={p.name} size={46} radius={16} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 750, fontSize: 14.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</div>
-              <div style={{ fontSize: 11.5, color: SUB, fontWeight: 650, marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>
-                <Barcode size={11} /> {p.code}
+              {/* Several products share a title, so show the reference id and
+                  category too — otherwise they're indistinguishable at the till. */}
+              <div style={{ fontSize: 11, color: SUB, fontWeight: 700, marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <span style={{ fontFamily: "ui-monospace, Menlo, monospace", background: "#F1F1F5", padding: "1px 5px", borderRadius: 5, letterSpacing: .3 }}>#{p.ref}</span>
+                <span style={{ textTransform: "capitalize" }}>{p.cat}</span>
+                {p.variants?.length > 0 && (
+                  <span style={{ opacity: .8 }}>· {p.variants.map((v) => `${v.size}:${v.stock}`).join("  ")}</span>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: SUB, fontWeight: 600, marginTop: 2, display: "flex", alignItems: "center", gap: 5 }}>
+                <Barcode size={10} /> {p.code || "—"}
               </div>
             </div>
-            <div style={{ textAlign: "right" }}>
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
               <div style={{ fontWeight: 800, fontSize: 15 }}>{fx(p.price)}</div>
               <div style={{ marginTop: 3 }}>
                 {p.stock === 0 ? <Pill tone="red">Out of stock</Pill> : <span style={{ fontSize: 11.5, fontWeight: 700, color: SUB }}>{p.stock} in stock</span>}
@@ -108,7 +123,7 @@ export function AddProductSheet({ S }) {
   const [price, setPrice] = useState("");
   const [cost, setCost] = useState("");
   const [stock, setStock] = useState("");
-  const [cat, setCat] = useState(CATEGORIES[0]);
+  const [cat, setCat] = useState((S.categories && S.categories[0]) || "other");
   // Blank unless the code came from a scan — the server mints a valid, unique
   // EAN-13 on save, so we never invent an unscannable code on the client.
   const [code, setCode] = useState(pre.code || "");
@@ -123,7 +138,7 @@ export function AddProductSheet({ S }) {
       </div>
       <Field label="Category">
         <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
-          {CATEGORIES.map((c) => (
+          {(S.categories || []).map((c) => (
             <button key={c} className="press" onClick={() => setCat(c)} style={{
               padding: "8px 13px", borderRadius: 99, fontSize: 12.5, fontWeight: 750,
               background: cat === c ? INK : "#ECECF0", color: cat === c ? "#fff" : "#5B5B63"

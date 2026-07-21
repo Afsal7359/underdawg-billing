@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { Plus, Share2, Printer, Wallet, Store, ClipboardList } from "lucide-react";
+import { Plus, Share2, Printer, Wallet, Store, ClipboardList, Trash2, Undo2, RotateCcw } from "lucide-react";
 import { INK, SUB, GREEN, RED, fx, fT, rel, TAX } from "../lib/theme.js";
 import { printHTML, receiptHTML, shareText } from "../lib/deviceActions.js";
 
 /* jsPDF is heavy (~370 kB), so it's code-split and only fetched the first time
    someone actually shares or downloads an invoice — the app shell stays light. */
 const pdfLib = () => import("../lib/pdf.js");
-import { MODE_ICON, BarcodeView, Pill, StatusPill, Avatar, Segmented, SearchBar, Card, Btn, Screen, LargeHeader, RoundBtn, SmallHeader, EmptyState, OrderRow } from "../components/ui.jsx";
+import { MODE_ICON, BarcodeView, Pill, StatusPill, Avatar, Segmented, SearchBar, Card, Btn, Screen, LargeHeader, RoundBtn, SmallHeader, EmptyState, OrderRow, Sheet, Field, inputStyle } from "../components/ui.jsx";
 
 /**
  * Share the invoice as a properly designed, branded PDF (logo, line items,
@@ -44,10 +44,14 @@ export async function downloadInvoice(S, o, c) {
 export function OrdersScreen({ S }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("All");
-  const list = S.orders.filter((o) => {
+  // Voided bills live only in Trash — they're not sales any more, so they must
+  // never appear in the normal list or the totals below it.
+  const scoped = S.orders.filter((o) => (filter === "Trash" ? o.voided : !o.voided));
+  const list = scoped.filter((o) => {
     const c = S.customers.find((x) => x.id === o.cid);
     const matchQ = !q || o.no.toLowerCase().includes(q.toLowerCase()) || (c && c.name.toLowerCase().includes(q.toLowerCase()));
-    const matchF = filter === "All" || (filter === "Paid" && o.status === "paid") ||
+    const matchF = filter === "All" || filter === "Trash" ||
+      (filter === "Paid" && o.status === "paid") ||
       (filter === "Due" && (o.status === "pending" || o.status === "partial")) ||
       (filter === "Overdue" && o.status === "overdue");
     return matchQ && matchF;
@@ -64,9 +68,12 @@ export function OrdersScreen({ S }) {
     <Screen>
       <LargeHeader eyebrow="Sales" title="Orders" right={<RoundBtn icon={Plus} dark onClick={() => S.push({ name: "bill" })} />} />
       <SearchBar value={q} onChange={setQ} placeholder="Invoice no. or customer" />
-      <Segmented options={["All", "Paid", "Due", "Overdue"]} value={filter} onChange={setFilter} style={{ marginTop: 12 }} />
+      <Segmented options={["All", "Paid", "Due", "Overdue", "Trash"]} value={filter} onChange={setFilter} style={{ marginTop: 12 }} />
       <div style={{ display: "flex", justifyContent: "space-between", padding: "13px 6px 2px", fontSize: 12.5, fontWeight: 700, color: SUB }}>
-        <span>{list.length} invoice{list.length === 1 ? "" : "s"}</span><span>{fx(sum)}</span>
+        <span>
+          {list.length} {filter === "Trash" ? "voided bill" : "invoice"}{list.length === 1 ? "" : "s"}
+        </span>
+        <span>{filter === "Trash" ? `${fx(sum)} reversed` : fx(sum)}</span>
       </div>
       {groups.map((g) => (
         <div key={g.k}>
@@ -143,13 +150,125 @@ export function OrderDetailScreen({ S, id }) {
           <div style={{ textAlign: "center", fontSize: 11, color: "#A8A8B0", fontWeight: 600, marginTop: 8 }}>Thank you for shopping with us</div>
         </div>
       </Card>
-      <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-        <Btn tone="white" icon={Printer} style={{ flex: 1 }} onClick={() => { printHTML(`Invoice ${o.no}`, receiptHTML(o, c, S.settings)); S.toast("Preparing receipt…", "check"); }}>Print</Btn>
-        {due > 0
-          ? <Btn tone="black" icon={Wallet} style={{ flex: 1.4 }} onClick={() => S.setSheet({ payment: { kind: "order", id: o.id } })}>Collect {fx(due)}</Btn>
-          : <Btn tone="black" icon={Share2} style={{ flex: 1.4 }} onClick={() => shareInvoice(S, o, c)}>Share invoice</Btn>}
-      </div>
+      {o.voided ? (
+        /* ---- in the trash: explain what happened, offer a restore ---- */
+        <>
+          <Card style={{ marginTop: 14, background: o.voidType === "returned" ? "#FFF6EA" : "#FFF0EF", boxShadow: "none" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <Pill tone={o.voidType === "returned" ? "orange" : "red"}>
+                {o.voidType === "returned" ? "Returned" : "Deleted"}
+              </Pill>
+              <div style={{ fontSize: 12, color: SUB, fontWeight: 650 }}>
+                {o.voidedAt ? `${rel(new Date(o.voidedAt))}, ${fT(new Date(o.voidedAt))}` : ""}
+              </div>
+            </div>
+            <div style={{ fontSize: 12.5, color: "#55555D", fontWeight: 600, marginTop: 9, lineHeight: 1.55 }}>
+              Stock has been put back and this bill no longer counts towards sales.
+              {o.refundDue > 0 && (
+                <> <b style={{ color: RED }}>Refund {fx(o.refundDue)} to the customer.</b></>
+              )}
+            </div>
+            {o.voidReason && (
+              <div style={{ fontSize: 12.5, color: SUB, fontWeight: 600, marginTop: 7, fontStyle: "italic" }}>
+                “{o.voidReason}”
+              </div>
+            )}
+          </Card>
+          <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+            <Btn tone="white" icon={Printer} style={{ flex: 1 }} onClick={() => { printHTML(`Invoice ${o.no}`, receiptHTML(o, c, S.settings)); S.toast("Preparing receipt…", "check"); }}>Print</Btn>
+            <Btn tone="black" icon={RotateCcw} style={{ flex: 1.2 }} onClick={() => S.setSheet({ voidOrder: { id: o.id, mode: "restore" } })}>Restore bill</Btn>
+          </div>
+        </>
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+            <Btn tone="white" icon={Printer} style={{ flex: 1 }} onClick={() => { printHTML(`Invoice ${o.no}`, receiptHTML(o, c, S.settings)); S.toast("Preparing receipt…", "check"); }}>Print</Btn>
+            {due > 0
+              ? <Btn tone="black" icon={Wallet} style={{ flex: 1.4 }} onClick={() => S.setSheet({ payment: { kind: "order", id: o.id } })}>Collect {fx(due)}</Btn>
+              : <Btn tone="black" icon={Share2} style={{ flex: 1.4 }} onClick={() => shareInvoice(S, o, c)}>Share invoice</Btn>}
+          </div>
+          <div style={{ display: "flex", gap: 10, marginTop: 10, paddingBottom: 8 }}>
+            <Btn tone="soft" icon={Undo2} style={{ flex: 1 }} onClick={() => S.setSheet({ voidOrder: { id: o.id, mode: "returned" } })}>Return</Btn>
+            <Btn tone="danger" icon={Trash2} style={{ flex: 1 }} onClick={() => S.setSheet({ voidOrder: { id: o.id, mode: "deleted" } })}>Delete</Btn>
+          </div>
+        </>
+      )}
     </Screen>
+  );
+}
+
+/**
+ * Confirm a delete / return / restore. Voiding is reversible (the bill goes to
+ * the trash, never away) but it moves stock and money, so it always asks first
+ * and spells out exactly what will happen.
+ */
+export function VoidOrderSheet({ S }) {
+  const cfg = S.sheet.voidOrder || {};
+  const o = S.orders.find((x) => x.id === cfg.id);
+  const [reason, setReason] = useState("");
+  if (!o) return null;
+
+  const mode = cfg.mode;                       // "deleted" | "returned" | "restore"
+  const restoring = mode === "restore";
+  const returning = mode === "returned";
+
+  const title = restoring ? "Restore this bill?" : returning ? "Return this bill?" : "Delete this bill?";
+  const cta = restoring ? "Restore bill" : returning ? "Confirm return" : "Delete bill";
+
+  const bullets = restoring
+    ? [
+        "It goes back into your invoice list and counts as a sale again.",
+        "The stock it sold is taken out of inventory again.",
+        o.total - o.paid > 0 ? `${fx(o.total - o.paid)} goes back onto the customer's balance.` : null,
+      ]
+    : [
+        "Stock from every item goes back into inventory.",
+        "The bill stops counting towards sales, profit and reports.",
+        o.total - o.paid > 0 ? `${fx(o.total - o.paid)} comes off the customer's balance.` : null,
+        o.paid > 0 ? `You'll need to refund ${fx(o.paid)} already taken.` : null,
+        "It moves to Trash — you can restore it any time.",
+      ];
+
+  return (
+    <Sheet open onClose={() => S.setSheet({})}>
+      <div style={{ fontSize: 19, fontWeight: 850 }}>{title}</div>
+      <div style={{ fontSize: 12.5, color: SUB, fontWeight: 650, marginTop: 3 }}>
+        {o.no} · {fx(o.total)} · {o.items.length} item{o.items.length === 1 ? "" : "s"}
+      </div>
+
+      <Card style={{ marginTop: 14, boxShadow: "none", background: "#F7F7FA" }}>
+        {bullets.filter(Boolean).map((b, i) => (
+          <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start", marginTop: i ? 9 : 0 }}>
+            <div style={{ width: 5, height: 5, borderRadius: 99, background: SUB, marginTop: 7, flexShrink: 0 }} />
+            <div style={{ fontSize: 13, fontWeight: 620, lineHeight: 1.5, color: "#44444C" }}>{b}</div>
+          </div>
+        ))}
+      </Card>
+
+      {!restoring && (
+        <div style={{ marginTop: 14 }}>
+          <Field label="Reason (optional)">
+            <input
+              style={inputStyle}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder={returning ? "e.g. wrong size" : "e.g. billed by mistake"}
+            />
+          </Field>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+        <Btn tone="soft" style={{ flex: 1 }} onClick={() => S.setSheet({})}>Cancel</Btn>
+        <Btn
+          tone={restoring ? "black" : returning ? "black" : "danger"}
+          style={{ flex: 1.3 }}
+          onClick={() => (restoring ? S.restoreOrder(o.id) : S.voidOrder(o.id, mode, reason.trim()))}
+        >
+          {cta}
+        </Btn>
+      </div>
+    </Sheet>
   );
 }
 

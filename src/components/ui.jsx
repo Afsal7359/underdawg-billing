@@ -260,18 +260,29 @@ export function OrderRow({ o, S, last }) {
       display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left",
       padding: "13px 0", borderBottom: last ? "none" : `1px solid ${LINE}`
     }}>
-      <div style={{ width: 42, height: 42, borderRadius: 15, background: "#F1F1F5", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        <Receipt size={19} color={INK} strokeWidth={2.1} />
+      <div style={{ width: 42, height: 42, borderRadius: 15, background: o.voided ? "#F3F3F6" : "#F1F1F5", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        <Receipt size={19} color={o.voided ? "#A9A9B2" : INK} strokeWidth={2.1} />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 750, fontSize: 14.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c ? c.name : "Customer"}</div>
+        <div style={{
+          fontWeight: 750, fontSize: 14.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          color: o.voided ? SUB : undefined,
+        }}>{c ? c.name : "Customer"}</div>
         <div style={{ fontSize: 12, color: SUB, fontWeight: 600, marginTop: 1.5 }}>
           {o.no} • {rel(o.date)}, {fT(o.date)}
         </div>
       </div>
       <div style={{ textAlign: "right" }}>
-        <div style={{ fontWeight: 800, fontSize: 15 }}>{fx(o.total)}</div>
-        <div style={{ marginTop: 3 }}><StatusPill status={o.status} /></div>
+        <div style={{
+          fontWeight: 800, fontSize: 15,
+          color: o.voided ? SUB : undefined,
+          textDecoration: o.voided ? "line-through" : undefined,
+        }}>{fx(o.total)}</div>
+        <div style={{ marginTop: 3 }}>
+          {o.voided
+            ? <Pill tone={o.voidType === "returned" ? "orange" : "red"}>{o.voidType === "returned" ? "Returned" : "Deleted"}</Pill>
+            : <StatusPill status={o.status} />}
+        </div>
       </div>
     </button>
   );

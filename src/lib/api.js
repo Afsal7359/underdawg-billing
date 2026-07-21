@@ -89,6 +89,7 @@ export const api = {
     }
     return {
       products: b.products || [],
+      categories: b.categories || [],
       customers: b.parties || [],
       orders: (b.orders || []).map(hydrateOrder),
       extraPay,
@@ -103,6 +104,17 @@ export const api = {
     const r = await req("/orders", { method: "POST", body: payload });
     return { order: hydrateOrder(r.order), products: r.products || [], party: r.party || null };
   },
+
+  // Bin a bill: type 'deleted' (billed in error) or 'returned' (goods back).
+  // Both restore stock and unwind the customer's balance; nothing is destroyed.
+  voidOrder: (id, type, reason) =>
+    req(`/orders/${id}/void`, { method: "POST", body: { type, reason } }).then((r) => ({
+      order: hydrateOrder(r.order), products: r.products || [], party: r.party || null,
+    })),
+  restoreOrder: (id) =>
+    req(`/orders/${id}/restore`, { method: "POST" }).then((r) => ({
+      order: hydrateOrder(r.order), products: r.products || [], party: r.party || null,
+    })),
 
   // Payments
   recordPayment: (target, amt, mode) =>

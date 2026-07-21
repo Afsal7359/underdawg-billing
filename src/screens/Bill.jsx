@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, X, Search, ChevronRight, Share2, CheckCircle2, Check, Trash2, Barcode, Keyboard, Zap, Flashlight, UserPlus, Clock, Camera, ScanLine, Download } from "lucide-react";
+import { Plus, X, Search, ChevronRight, Share2, CheckCircle2, Check, Trash2, Barcode, Keyboard, Flashlight, UserPlus, Clock, Camera, ScanLine, Download } from "lucide-react";
 import { INK, SUB, LINE, GREEN, ORANGE, BLUE, fx, TAX, SAFE_T, SAFE_B } from "../lib/theme.js";
 import { shareInvoice, downloadInvoice } from "./Orders.jsx";
 import { MODE_ICON, BarcodeView, Pill, StatusPill, Avatar, SearchBar, Stepper, Card, Btn, Toggle, Screen, RoundBtn, SmallHeader, Sheet, EmptyState, Field, inputStyle } from "../components/ui.jsx";
@@ -206,34 +206,47 @@ export function ScannerModal({ S }) {
   const [flash, setFlash] = useState(false);
   const [torch, setTorch] = useState(false);
   const [canTorch, setCanTorch] = useState(false);
+  const [scanReady, setScanReady] = useState(false); // detector running?
+  const [seen, setSeen] = useState("");              // last code read (feedback)
   const ctx = S.scan.ctx;
   const cartCount = Object.values(S.cart).reduce((a, l) => a + (l?.qty || 0), 0);
 
-  const handleCode = (code) => {
+  const handleCode = (raw) => {
+    const code = String(raw).replace(/\s+/g, "").trim();
+    if (!code) return;
     const now = Date.now();
+    // Ignore the same code re-read within 1.6s (the camera reads ~4×/second).
     if (lastRef.current.code === code && now - lastRef.current.t < 1600) return;
     lastRef.current = { code, t: now };
-    setFlash(true); setTimeout(() => setFlash(false), 350);
-    const p = S.products.find((x) => x.code === String(code).trim());
+
+    setFlash(true); setTimeout(() => setFlash(false), 300);
+    setSeen(code); setTimeout(() => setSeen((s) => (s === code ? "" : s)), 1800);
+
+    const p = S.products.find((x) => x.code === code);
+
     if (!p) {
-      S.closeScanner();
-      S.toast("Code not found — save it as a new item", "warn");
-      S.setSheet({ addProduct: { code: String(code).trim() } });
+      // Unknown barcode. In the bill flow keep the scanner open (rapid scanning);
+      // in lookup, offer to save it as a new item.
+      if (ctx === "bill") {
+        S.toast(`Not in catalogue: ${code}`, "warn");
+      } else {
+        S.closeScanner();
+        S.toast("Code not found — save it as a new item", "warn");
+        S.setSheet({ addProduct: { code } });
+      }
       return;
     }
+
     if (ctx === "bill") {
-      S.addToCart(p.id, true);
-      S.toast(`Added ${p.name}`, "check");
+      // One barcode covers all sizes, so add the first size that's in stock and
+      // show which — the cashier can adjust in the cart. Keeps scanning fast.
+      const size = p.variants?.find((v) => (v.stock || 0) > 0)?.size ?? p.variants?.[0]?.size ?? "";
+      S.addToCart(p, { size, silent: true });
+      S.toast(`Added ${p.name}${size ? " · " + size : ""}`, "check");
     } else {
       S.closeScanner();
       S.setSheet({ product: p.id });
     }
-  };
-
-  const simulate = () => {
-    if (!S.products.length) return S.toast("No products to simulate");
-    const p = S.products[Math.floor(Math.random() * S.products.length)];
-    handleCode(p.code);
   };
 
   // Keep the detect loop calling the LATEST handleCode (so cart/product changes
@@ -256,13 +269,25 @@ export function ScannerModal({ S }) {
       if (!navigator.mediaDevices?.getUserMedia) { setCam("off"); return; }
 
       try {
+        // Request a HIGH resolution. The default (~640×480) is too coarse to
+        // resolve a dense EAN-13 — the camera opens but nothing ever decodes.
+        // 1080p makes real-world barcode reading reliable.
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
+          video: {
+            facingMode: { ideal: "environment" },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          },
           audio: false,
         });
       } catch (e) {
-        if (!dead) setCam(e && (e.name === "NotAllowedError" || e.name === "SecurityError") ? "denied" : "off");
-        return;
+        // Some devices reject the resolution hints — retry with a bare request.
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false });
+        } catch (e2) {
+          if (!dead) setCam(e2 && (e2.name === "NotAllowedError" || e2.name === "SecurityError") ? "denied" : "off");
+          return;
+        }
       }
       if (dead) { stop(); return; }
 
@@ -273,12 +298,15 @@ export function ScannerModal({ S }) {
       if (dead) { stop(); return; }
       setCam("on");
 
-      // Torch capability (back camera on many Android phones).
+      // Torch capability + keep the barcode in focus.
       const track = stream.getVideoTracks()[0];
       trackRef.current = track;
       try {
         const caps = track.getCapabilities?.();
         if (caps && caps.torch) setCanTorch(true);
+        if (caps && caps.focusMode && caps.focusMode.includes("continuous")) {
+          await track.applyConstraints({ advanced: [{ focusMode: "continuous" }] });
+        }
       } catch { /* ignore */ }
 
       // Detector: use the native BarcodeDetector when present (Android/Chrome),
@@ -299,17 +327,26 @@ export function ScannerModal({ S }) {
         }
         if (dead) { stop(); return; }
         const det = new DetectorClass({
-          formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "qr_code", "itf"],
+          formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "qr_code", "itf", "codabar"],
         });
+        setScanReady(true);
+
+        // `busy` prevents overlapping detect() calls from piling up (the WASM
+        // decoder can take longer than one tick).
+        let busy = false;
         iv = setInterval(async () => {
-          if (dead || !videoRef.current || videoRef.current.readyState < 2) return;
+          if (busy || dead || !videoRef.current || videoRef.current.readyState < 2) return;
+          busy = true;
           try {
             const codes = await det.detect(videoRef.current);
-            if (codes && codes[0] && codes[0].rawValue) handleRef.current(codes[0].rawValue);
+            if (codes && codes.length && codes[0].rawValue) handleRef.current(codes[0].rawValue);
           } catch { /* frame not ready */ }
-        }, 350);
+          busy = false;
+        }, 250);
       } catch {
-        // Detection unavailable — camera preview + manual entry still work.
+        // Detection unavailable on this device — camera preview + manual entry
+        // still work, so make that obvious.
+        setScanReady(false);
       }
     };
 
@@ -384,17 +421,27 @@ export function ScannerModal({ S }) {
         ))}
       </div>
 
-      <div style={{ padding: `14px 20px calc(${SAFE_B} + 12px)`, display: "flex", flexDirection: "column", gap: 11 }}>
+      {/* Live status so the cashier knows scanning is actually working. */}
+      <div style={{ textAlign: "center", minHeight: 20, padding: "0 20px", marginBottom: 4 }}>
+        {seen ? (
+          <span style={{ fontSize: 13, fontWeight: 800, color: "#4ADE80", letterSpacing: 1 }}>Scanned {seen}</span>
+        ) : cam === "on" && scanReady ? (
+          <span style={{ fontSize: 12.5, fontWeight: 650, opacity: .6 }}>Point the camera at a barcode</span>
+        ) : cam === "on" && !scanReady ? (
+          <span style={{ fontSize: 12.5, fontWeight: 650, color: "#FFB27A" }}>Auto-scan unavailable — type the code below</span>
+        ) : null}
+      </div>
+
+      <div style={{ padding: `4px 20px calc(${SAFE_B} + 12px)`, display: "flex", flexDirection: "column", gap: 11 }}>
         <div style={{ display: "flex", gap: 9, background: "rgba(255,255,255,.1)", borderRadius: 16, padding: "6px 6px 6px 15px", alignItems: "center" }}>
           <Keyboard size={17} color="rgba(255,255,255,.55)" />
-          <input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="Type code manually"
+          <input value={manual} onChange={(e) => setManual(e.target.value)} placeholder="Type or enter code"
             inputMode="numeric" style={{ flex: 1, color: "#fff", fontSize: 15, fontWeight: 600, minWidth: 0 }}
             onKeyDown={(e) => { if (e.key === "Enter" && manual) { handleCode(manual); setManual(""); } }} />
           <button className="press" onClick={() => { if (manual) { handleCode(manual); setManual(""); } }}
             style={{ background: "#fff", color: INK, fontWeight: 800, fontSize: 13.5, padding: "9px 15px", borderRadius: 11 }}>Add</button>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
-          <Btn tone="white" icon={Zap} style={{ flex: 1, padding: "14px" }} onClick={simulate}>Simulate scan</Btn>
           {ctx === "bill" && (
             <Btn tone="green" icon={Check} style={{ flex: 1, padding: "14px" }} onClick={S.closeScanner}>
               Done{cartCount > 0 ? ` (${cartCount})` : ""}
