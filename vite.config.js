@@ -40,7 +40,10 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,png,svg,webmanifest}"],
+        // Include wasm so the barcode scanner works offline, and lift the size
+        // limit so the ~1 MB ZXing wasm is precached rather than skipped.
+        globPatterns: ["**/*.{js,css,html,png,svg,webmanifest,wasm}"],
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: "/index.html"
       }
     })

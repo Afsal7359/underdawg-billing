@@ -198,9 +198,14 @@ export function BillScreen({ S }) {
 export function ScannerModal({ S }) {
   const videoRef = useRef(null);
   const lastRef = useRef({ code: "", t: 0 });
+  const trackRef = useRef(null);      // the live camera track (for torch + cleanup)
+  const handleRef = useRef(null);     // always-fresh handleCode for the detect loop
+  // cam states: "try" | "on" | "off" | "denied" | "insecure"
   const [cam, setCam] = useState("try");
   const [manual, setManual] = useState("");
   const [flash, setFlash] = useState(false);
+  const [torch, setTorch] = useState(false);
+  const [canTorch, setCanTorch] = useState(false);
   const ctx = S.scan.ctx;
   const cartCount = Object.values(S.cart).reduce((a, l) => a + (l?.qty || 0), 0);
 
@@ -226,32 +231,103 @@ export function ScannerModal({ S }) {
   };
 
   const simulate = () => {
+    if (!S.products.length) return S.toast("No products to simulate");
     const p = S.products[Math.floor(Math.random() * S.products.length)];
     handleCode(p.code);
   };
 
+  // Keep the detect loop calling the LATEST handleCode (so cart/product changes
+  // aren't captured stale by the one-time effect below).
+  handleRef.current = handleCode;
+
   useEffect(() => {
     let stream, iv, dead = false;
-    (async () => {
+
+    const stop = () => {
+      if (iv) clearInterval(iv);
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      trackRef.current = null;
+    };
+
+    const start = async () => {
+      // Camera needs a secure context (HTTPS or localhost). Over plain HTTP or a
+      // bare LAN IP the browser silently blocks it — tell the user why.
+      if (!window.isSecureContext) { setCam("insecure"); return; }
+      if (!navigator.mediaDevices?.getUserMedia) { setCam("off"); return; }
+
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-        if (dead || !videoRef.current) { stream && stream.getTracks().forEach((t) => t.stop()); return; }
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        setCam("on");
-        if ("BarcodeDetector" in window) {
-          const det = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "code_128", "upc_a", "qr_code"] });
-          iv = setInterval(async () => {
-            try {
-              const codes = await det.detect(videoRef.current);
-              if (codes && codes[0]) handleCode(codes[0].rawValue);
-            } catch (e) {}
-          }, 480);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false,
+        });
+      } catch (e) {
+        if (!dead) setCam(e && (e.name === "NotAllowedError" || e.name === "SecurityError") ? "denied" : "off");
+        return;
+      }
+      if (dead) { stop(); return; }
+
+      const v = videoRef.current;      // the <video> is ALWAYS mounted now, so this is non-null
+      if (!v) { stop(); return; }
+      v.srcObject = stream;
+      try { await v.play(); } catch { /* autoplay quirks — video still shows */ }
+      if (dead) { stop(); return; }
+      setCam("on");
+
+      // Torch capability (back camera on many Android phones).
+      const track = stream.getVideoTracks()[0];
+      trackRef.current = track;
+      try {
+        const caps = track.getCapabilities?.();
+        if (caps && caps.torch) setCanTorch(true);
+      } catch { /* ignore */ }
+
+      // Detector: use the native BarcodeDetector when present (Android/Chrome),
+      // otherwise load the WASM ponyfill so scanning also works on iOS/Safari
+      // and Firefox. Loaded lazily so it only downloads when the scanner opens.
+      try {
+        let DetectorClass = window.BarcodeDetector;
+        if (!DetectorClass) {
+          const mod = await import("barcode-detector/ponyfill");
+          // Load the ZXing WASM from our OWN origin (public/zxing_reader.wasm)
+          // instead of the default jsDelivr CDN — so scanning works offline and
+          // has no third-party dependency.
+          mod.setZXingModuleOverrides?.({
+            locateFile: (path, prefix) =>
+              path.endsWith(".wasm") ? "/zxing_reader.wasm" : prefix + path,
+          });
+          DetectorClass = mod.BarcodeDetector;
         }
-      } catch (e) { if (!dead) setCam("off"); }
-    })();
-    return () => { dead = true; if (iv) clearInterval(iv); if (stream) stream.getTracks().forEach((t) => t.stop()); };
+        if (dead) { stop(); return; }
+        const det = new DetectorClass({
+          formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "qr_code", "itf"],
+        });
+        iv = setInterval(async () => {
+          if (dead || !videoRef.current || videoRef.current.readyState < 2) return;
+          try {
+            const codes = await det.detect(videoRef.current);
+            if (codes && codes[0] && codes[0].rawValue) handleRef.current(codes[0].rawValue);
+          } catch { /* frame not ready */ }
+        }, 350);
+      } catch {
+        // Detection unavailable — camera preview + manual entry still work.
+      }
+    };
+
+    start();
+    return () => { dead = true; stop(); };
   }, []);
+
+  // Toggle the camera torch (where the hardware supports it).
+  const toggleTorch = async () => {
+    const track = trackRef.current;
+    if (!track) return S.toast("Torch needs the camera running");
+    if (!canTorch) return S.toast("This device's camera has no torch");
+    try {
+      const next = !torch;
+      await track.applyConstraints({ advanced: [{ torch: next }] });
+      setTorch(next);
+    } catch { S.toast("Couldn't toggle the torch"); }
+  };
 
   return (
     <div className="dim-anim nb-root" style={{ position: "absolute", inset: 0, zIndex: 80, background: "#08080C", color: "#fff", display: "flex", flexDirection: "column" }}>
@@ -263,8 +339,8 @@ export function ScannerModal({ S }) {
           <div style={{ fontWeight: 800, fontSize: 16 }}>Scan barcode</div>
           <div style={{ fontSize: 11.5, opacity: .55, fontWeight: 600 }}>{ctx === "bill" ? "Items add straight to the bill" : "Look up any item"}</div>
         </div>
-        <button className="pressS" onClick={() => S.toast("Torch is a hardware feature")} style={{ width: 38, height: 38, borderRadius: 99, background: "rgba(255,255,255,.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Flashlight size={18} color="#fff" strokeWidth={2.3} />
+        <button className="pressS" onClick={toggleTorch} style={{ width: 38, height: 38, borderRadius: 99, background: torch ? "#fff" : "rgba(255,255,255,.12)", opacity: canTorch ? 1 : 0.45, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Flashlight size={18} color={torch ? INK : "#fff"} strokeWidth={2.3} />
         </button>
       </div>
 
@@ -274,12 +350,24 @@ export function ScannerModal({ S }) {
           background: "#101018", boxShadow: flash ? `0 0 0 4px ${GREEN}, 0 0 60px rgba(74,222,128,.5)` : "0 0 0 1px rgba(255,255,255,.1)",
           transition: "box-shadow .2s ease"
         }}>
-          {cam === "on" && <video ref={videoRef} playsInline muted style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
+          {/* The video is ALWAYS mounted (just hidden until ready) so the ref
+              exists the moment getUserMedia resolves — mounting it only when
+              cam==="on" was the reason the camera never opened. */}
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            autoPlay
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: cam === "on" ? 1 : 0, transition: "opacity .25s ease" }}
+          />
           {cam !== "on" && (
             <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, background: "radial-gradient(circle at 50% 30%, #1B1B28, #0B0B12)" }}>
-              <Barcode size={62} color="rgba(255,255,255,.85)" className="pulse" strokeWidth={1.4} />
-              <div style={{ fontSize: 12, fontWeight: 700, opacity: .55, textAlign: "center", padding: "0 30px" }}>
-                {cam === "try" ? "Starting camera…" : "Camera unavailable here — demo mode is on"}
+              <Barcode size={58} color="rgba(255,255,255,.85)" className={cam === "try" ? "pulse" : ""} strokeWidth={1.4} />
+              <div style={{ fontSize: 12, fontWeight: 700, opacity: .62, textAlign: "center", padding: "0 26px", lineHeight: 1.5 }}>
+                {cam === "try" && "Starting camera…"}
+                {cam === "denied" && "Camera blocked. Allow camera access for this site in your browser settings, then reopen."}
+                {cam === "insecure" && "Camera needs a secure (https://) connection. Type the code below instead."}
+                {cam === "off" && "No camera available here — type the code below."}
               </div>
             </div>
           )}
